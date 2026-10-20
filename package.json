@@ -1,0 +1,36 @@
+{
+  "name": "@munipuno/hydra-auth-vue",
+  "version": "0.1.0",
+  "description": "Shared Hydra/OIDC authentication client for the municipal Vue 3 SPAs (oidc-client-ts + Pinia + vue-router + axios).",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "axios": "^1",
+    "oidc-client-ts": "^3.4",
+    "pinia": "^2 || ^3",
+    "vue": "^3.4",
+    "vue-router": "^4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.2.4",
+    "@vue/test-utils": "^2.4.6",
+    "axios": "^1.7.9",
+    "jsdom": "^25.0.1",
+    "oidc-client-ts": "^3.4.0",
+    "pinia": "^3.0.1",
+    "vitest": "^3.0.5",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "license": "MIT"
+}
