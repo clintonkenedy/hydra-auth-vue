@@ -47,6 +47,8 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | `routes` | no | `{ login: '/oidc-login', callback: '/oidc-callback' }` | Route paths the consumer mounts the components on. |
 | `requireAuthByDefault` | no | `false` | When `true`, every route requires auth unless `to.meta.public === true`. |
 | `profileCache` | no | `{ enabled: true, storage: window.localStorage, maxAgeSeconds: 86400, retrySeconds: 60 }` | Last-profile cache used when the core API is down. See [Last-profile cache (core outage)](#last-profile-cache-core-outage). |
+| `idleTimeoutMinutes` | no | `60` | Inactivity timeout. See [Session timeouts](#session-timeouts). |
+| `maxSessionHours` | no | `10` | Maximum session length. See [Session timeouts](#session-timeouts). |
 
 The returned plugin object exposes:
 
@@ -128,7 +130,89 @@ const { user, permisos, hasPermission, isAuthenticated, login, logout } = useAut
 
 `useAuth()` also exposes `profileDegraded` (ref, `true` while the profile shown
 comes from the last-profile cache) and `profileFetchedAt` (ref, epoch ms of the
-moment the applied profile was actually fetched).
+moment the applied profile was actually fetched), plus the session-timeout
+surface: `sessionExpiresAt`, `idleExpiresAt`, `sessionWarning`, `closedReason`
+(refs) and the `stayConnected()` / `closeSession(reason)` actions described in [Session timeouts](#session-timeouts).
+
+## Session timeouts
+
+The package closes the session automatically after **60 minutes of
+inactivity** and after a **maximum session length of 10 hours**, with warnings
+before each close and synchronization across tabs of the same origin.
+
+### Options
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `idleTimeoutMinutes` | `60` | Minutes without activity (`mousemove`, `mousedown`, `keydown`, `scroll`, `touchstart`, `wheel`) before the session closes. `0`/`null` disables the idle timeout. |
+| `idleWarningSeconds` | `60` | Lead time of the idle warning modal ("Tu sesión está por cerrarse" with a countdown, "Seguir conectado" and "Salir"). |
+| `maxSessionHours` | `10` | Maximum session length measured from the OIDC `auth_time` claim (fallback: the `iat` of the first id_token of the session). Counts even while the user is active. `0`/`null` disables it. |
+| `maxSessionWarningMinutes` | `5` | Lead time of the max-session notice ("Tu sesión vence en 5 min, guardá lo que estés haciendo" with an "Entendido" button that only hides it — no extension). |
+| `sessionTimeouts` | `{ storage: window.localStorage }` | Advanced overrides: injectable `now` clock and `storage` (mainly for tests). |
+
+Timers only run while a user is authenticated — they start after the signin
+callback (or `loadUser()` with a user), never run on public routes before
+login, and stop on close/logout. When both timeouts are disabled no timer or
+listener is ever installed.
+
+### Behavior on automatic close
+
+When the idle or the max deadline is reached (or the user clicks "Salir"):
+
+- silent renew stops and the OIDC user is removed (`userManager.removeUser()`),
+- the stored token and the store are cleared, the profile retry timer stops,
+- the browser is redirected to the login route (`routes.login`) with
+  `?reason=idle|max`, where `OidcLogin` shows "Tu sesión se cerró por
+  inactividad" / "Tu sesión se cerró por tiempo máximo" for 2.5 s before
+  starting the login redirect.
+
+Unlike `logout()`, the automatic close **never** calls the Hydra end-session
+endpoint and **never** removes the last-profile cache
+(`hydraAuth.profile:<sub>`), so the SPA can still start in degraded mode after
+re-login. Explicit `logout()` keeps today’s behavior (removes the cache,
+`signoutRedirect`) and also broadcasts the close to the other tabs.
+
+### Tab synchronization
+
+Tabs of the same origin share state through `localStorage` + `storage` events:
+
+- `hydraAuth.lastActivity` — epoch ms of the latest activity in any tab
+  (written at most once every 5 s); activity in any tab keeps all tabs alive.
+- `hydraAuth.sessionEvent` — `{ type: 'close'|'logout', reason, at }`; an
+  automatic close or an explicit logout in one tab closes all tabs.
+- `hydraAuth.sessionStart` — fallback session start (first id_token `iat`)
+  used when the profile has no `auth_time` claim.
+
+### Mounting the guard
+
+Mount `<HydraSessionGuard />` once in the authenticated layout (next to
+`<HydraDegradedBanner />`). It renders the idle warning modal and the
+max-session notice (inline styles, no UI framework) and performs the redirect
+to the login route after a close:
+
+```vue
+<template>
+  <HydraDegradedBanner />
+  <HydraSessionGuard />
+  <router-view />
+</template>
+
+<script setup>
+import { HydraDegradedBanner, HydraSessionGuard } from '@munipuno/hydra-auth-vue'
+</script>
+```
+
+The store (and `useAuth()`) exposes `sessionExpiresAt`, `idleExpiresAt`,
+`sessionWarning` (`'idle' | 'max' | null`), `closedReason`
+(`'idle' | 'max' | null`, readable on the login page) and the actions
+`stayConnected()` and `closeSession(reason)`.
+
+### Security note
+
+This is **front-side protection for unattended PCs** — it limits how long an
+open tab keeps a usable session on a shared or abandoned machine. It is not
+the primary security boundary: access tokens still expire server-side (10
+minutes) and the backend enforces real authorization on every request.
 
 ## Last-profile cache (core outage)
 

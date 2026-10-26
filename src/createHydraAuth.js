@@ -15,6 +15,12 @@ const DEFAULT_PROFILE_CACHE = {
   maxAgeSeconds: 86400,
   retrySeconds: 60,
 }
+const DEFAULT_SESSION_TIMEOUTS = {
+  idleTimeoutMinutes: 60,
+  idleWarningSeconds: 60,
+  maxSessionHours: 10,
+  maxSessionWarningMinutes: 5,
+}
 
 /**
  * Create the Hydra/OIDC auth plugin.
@@ -32,6 +38,12 @@ const DEFAULT_PROFILE_CACHE = {
  * @param {boolean} [options.requireAuthByDefault] Treat every route as protected unless `to.meta.public === true`.
  * @param {object} [options.profileCache] Last-known-profile cache used when the core API is unreachable.
  *   Defaults to `{ enabled: true, storage: window.localStorage, maxAgeSeconds: 86400, retrySeconds: 60 }`.
+ * @param {number|null} [options.idleTimeoutMinutes] Inactivity timeout (default 60; `0`/`null` disables).
+ * @param {number} [options.idleWarningSeconds] Idle warning lead time (default 60).
+ * @param {number|null} [options.maxSessionHours] Maximum session length (default 10; `0`/`null` disables).
+ * @param {number} [options.maxSessionWarningMinutes] Max-session warning lead time (default 5).
+ * @param {object} [options.sessionTimeouts] Advanced overrides for the session timers
+ *   (`now` clock and `storage`, defaults `Date.now` / `window.localStorage`).
  * @returns {{ install(app): void, guard(opts): Function, attach(axiosInstance): object, store: Function, userManager: UserManager }}
  */
 export function createHydraAuth(options) {
@@ -47,12 +59,28 @@ export function createHydraAuth(options) {
     routes = DEFAULT_ROUTES,
     requireAuthByDefault = false,
     profileCache = {},
+    idleTimeoutMinutes = DEFAULT_SESSION_TIMEOUTS.idleTimeoutMinutes,
+    idleWarningSeconds = DEFAULT_SESSION_TIMEOUTS.idleWarningSeconds,
+    maxSessionHours = DEFAULT_SESSION_TIMEOUTS.maxSessionHours,
+    maxSessionWarningMinutes = DEFAULT_SESSION_TIMEOUTS.maxSessionWarningMinutes,
+    sessionTimeouts = {},
   } = options
 
   const profileCacheConfig = {
     ...DEFAULT_PROFILE_CACHE,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     ...profileCache,
+  }
+
+  const sessionTimeoutsConfig = {
+    idleTimeoutMinutes,
+    idleWarningSeconds,
+    maxSessionHours,
+    maxSessionWarningMinutes,
+    // Injectable clock/storage for tests. `now` stays undefined by default so
+    // the controller resolves Date.now() lazily (fake-timer friendly).
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    ...sessionTimeouts,
   }
 
   const userManager = new UserManager({
@@ -75,6 +103,10 @@ export function createHydraAuth(options) {
     routes,
     requireAuthByDefault,
     profileCache: profileCacheConfig,
+    sessionTimeouts: sessionTimeoutsConfig,
+    // Session-timeouts controller (see sessionTimeouts.js); created by the
+    // store when a user becomes authenticated, null while stopped.
+    sessionTimeoutsController: null,
     // Interval id of the degraded-mode background retry (see store.fetchProfile).
     profileRetryTimer: null,
     // In-memory flag guarding against signinRedirect() loops when

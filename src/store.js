@@ -9,6 +9,11 @@ import {
   stopProfileRetry,
   writeProfileCache,
 } from './profileCache.js'
+import {
+  broadcastSessionEvent,
+  clearSessionState,
+  createSessionTimeouts,
+} from './sessionTimeouts.js'
 
 let activeContext = null
 let storeDefinition = null
@@ -47,6 +52,17 @@ function defineHydraAuthStore(context) {
       profileDegraded: false,
       // Epoch ms of the moment the applied profile was actually fetched.
       profileFetchedAt: null,
+      // Epoch ms when the maximum session ends (null when disabled/stopped).
+      sessionExpiresAt: null,
+      // Epoch ms when the inactivity window ends (null when disabled/stopped).
+      idleExpiresAt: null,
+      // 'idle' | 'max' | null — which session warning is currently active.
+      sessionWarning: null,
+      // 'idle' | 'max' | null — why the session was closed automatically.
+      closedReason: null,
+      // Internal: true right after closeSession() until HydraSessionGuard
+      // performs the redirect to the login route.
+      closeRedirectPending: false,
     }),
     getters: {
       hasPermission: (state) => (permission) => state.permisos?.includes(permission),
@@ -58,6 +74,7 @@ function defineHydraAuthStore(context) {
         const ctx = getActiveContext()
         this.user = await ctx.userManager.getUser()
         this.userLoaded = true
+        if (this.user) this.startSessionTimeouts()
         return this.user
       },
       async login() {
@@ -66,7 +83,12 @@ function defineHydraAuthStore(context) {
       },
       async logout() {
         const ctx = getActiveContext()
+        this.stopSessionTimeouts()
         stopProfileRetry(ctx)
+        // Explicit logout keeps removing the last-profile cache and
+        // broadcasts so the other tabs close too.
+        broadcastSessionEvent(ctx, 'logout')
+        clearSessionState(ctx)
         removeProfileCache(ctx, this.user?.profile?.sub)
         ctx.clearToken()
         this.clearUser()
@@ -82,7 +104,81 @@ function defineHydraAuthStore(context) {
         this.user = user
         this.userLoaded = true
         ctx.setToken(user)
+        this.closedReason = null
+        this.closeRedirectPending = false
+        // A redirect callback is always a fresh sign-in: drop any session start
+        // or last activity left by a previous session (e.g. a tab closed
+        // without logout yesterday) so the new session is measured from now.
+        clearSessionState(ctx)
+        this.startSessionTimeouts()
         return user
+      },
+      /**
+       * Start the idle/max-session timers for the current user (no-op when
+       * both timeouts are disabled or the timers already run). S10: timers
+       * only run while there is an authenticated user.
+       */
+      startSessionTimeouts() {
+        const ctx = getActiveContext()
+        if (!this.user || ctx.sessionTimeoutsController) return
+        const controller = createSessionTimeouts(ctx, {
+          onState: ({ idleExpiresAt, sessionExpiresAt, warning }) => {
+            this.idleExpiresAt = idleExpiresAt
+            this.sessionExpiresAt = sessionExpiresAt
+            this.sessionWarning = warning
+          },
+          onExpire: (reason) => {
+            this.closeSession(reason)
+          },
+          onRemoteClose: (event) => {
+            // A close/logout broadcast from another tab closes this one
+            // without re-broadcasting (no storm).
+            const reason = event.type === 'close' ? (event.reason ?? null) : null
+            this.closeSession(reason, { broadcast: false })
+          },
+        })
+        if (!controller) return
+        ctx.sessionTimeoutsController = controller
+        controller.start(this.user)
+      },
+      stopSessionTimeouts() {
+        const ctx = getActiveContext()
+        ctx.sessionTimeoutsController?.stop()
+        ctx.sessionTimeoutsController = null
+        this.sessionWarning = null
+        this.idleExpiresAt = null
+        this.sessionExpiresAt = null
+      },
+      /**
+       * "Seguir conectado": reset the inactivity window and hide the warning.
+       */
+      stayConnected() {
+        const ctx = getActiveContext()
+        ctx.sessionTimeoutsController?.stayConnected()
+        this.sessionWarning = null
+      },
+      /**
+       * Automatic session close (idle/max or "Salir"). Unlike logout() it
+       * never calls Hydra end-session (no signoutRedirect) and never removes
+       * the last-profile cache (`hydraAuth.profile:<sub>`), so the SPA can
+       * still start in degraded mode after re-login.
+       */
+      async closeSession(reason = null, { broadcast = true } = {}) {
+        const ctx = getActiveContext()
+        this.stopSessionTimeouts()
+        stopProfileRetry(ctx)
+        if (broadcast) broadcastSessionEvent(ctx, 'close', reason)
+        clearSessionState(ctx)
+        ctx.userManager.stopSilentRenew?.()
+        await ctx.userManager.removeUser?.()
+        ctx.clearToken()
+        this.clearUser()
+        this.user = null
+        this.userLoaded = false
+        this.profileDegraded = false
+        this.profileFetchedAt = null
+        this.closedReason = reason
+        this.closeRedirectPending = true
       },
       async fetchProfile() {
         const ctx = getActiveContext()
@@ -158,17 +254,33 @@ export function useHydraAuth(pinia) {
  */
 export function useAuth() {
   const store = useHydraAuth()
-  const { user, roles, permisos, profileDegraded, profileFetchedAt } = storeToRefs(store)
+  const {
+    user,
+    roles,
+    permisos,
+    profileDegraded,
+    profileFetchedAt,
+    sessionExpiresAt,
+    idleExpiresAt,
+    sessionWarning,
+    closedReason,
+  } = storeToRefs(store)
   return {
     user,
     roles,
     permisos,
     profileDegraded,
     profileFetchedAt,
+    sessionExpiresAt,
+    idleExpiresAt,
+    sessionWarning,
+    closedReason,
     hasPermission: (permission) => store.hasPermission(permission),
     hasRole: (role) => store.hasRole(role),
     isAuthenticated: computed(() => store.isAuthenticated),
     login: () => store.login(),
     logout: () => store.logout(),
+    stayConnected: () => store.stayConnected(),
+    closeSession: (reason) => store.closeSession(reason),
   }
 }
