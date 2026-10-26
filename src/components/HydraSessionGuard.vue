@@ -42,9 +42,10 @@ import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { getActiveContext, useHydraAuth } from '../store.js'
 import { brandingCssVars, resolveBranding } from '../branding.js'
+import { navigateToUrl, resolveCloseRedirect } from '../closeRedirect.js'
 
 // Renders the idle-warning modal (S2) and the max-session notice (S4), and
-// redirects to the login route after an automatic close (S6). Mount it once
+// performs the close redirect after an automatic close (S6). Mount it once
 // in the authenticated layout.
 const store = useHydraAuth()
 const router = useRouter()
@@ -91,17 +92,30 @@ function exitNow() {
   store.closeSession('idle')
 }
 
-// After closeSession() (this tab or broadcast from another one), redirect to
-// the configured login route with the close reason as a query param.
+// After closeSession() (this tab or broadcast from another one), redirect
+// according to `closeRedirect`: 'home' (default) lands on the
+// postLogoutRedirectUri with ?session_closed=<reason> — the same place an
+// explicit logout lands — while 'login' keeps the pre-0.5 behavior of going
+// to the login route with ?reason=<reason>.
 watch(
   closeRedirectPending,
   (pending) => {
     if (!pending) return
     store.closeRedirectPending = false
-    if (!router) return
     const ctx = getActiveContext()
     const reason = closedReason.value
-    router.replace({ path: ctx.routes.login, query: reason ? { reason } : {} })
+    if (ctx.closeRedirect === 'login') {
+      if (!router) return
+      router.replace({ path: ctx.routes.login, query: reason ? { reason } : {} })
+      return
+    }
+    const target = resolveCloseRedirect(ctx, reason)
+    if (target.mode === 'assign') {
+      navigateToUrl(target.url)
+      return
+    }
+    if (!router) return
+    router.replace(target.location)
   },
   { immediate: true },
 )

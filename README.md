@@ -45,6 +45,7 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | `storage` | no | `window.sessionStorage` | Web Storage used for the token, the OIDC state and `redirectToAfterLogin`. |
 | `tokenStorageKey` | no | `token` | Storage key for the `Bearer <access_token>` value. |
 | `routes` | no | `{ login: '/oidc-login', callback: '/oidc-callback' }` | Route paths the consumer mounts the components on. |
+| `closeRedirect` | no | `'home'` | Where the browser lands after an automatic session close: `'home'` → `postLogoutRedirectUri` with `?session_closed=idle\|max`; `'login'` → `routes.login` with `?reason=idle\|max`. See [Session timeouts](#session-timeouts). |
 | `requireAuthByDefault` | no | `false` | When `true`, every route requires auth unless `to.meta.public === true`. |
 | `profileCache` | no | `{ enabled: true, storage: window.localStorage, maxAgeSeconds: 86400, retrySeconds: 60 }` | Last-profile cache used when the core API is down. See [Last-profile cache (core outage)](#last-profile-cache-core-outage). |
 | `idleTimeoutMinutes` | no | `60` | Inactivity timeout. See [Session timeouts](#session-timeouts). |
@@ -181,6 +182,7 @@ before each close and synchronization across tabs of the same origin.
 | `idleWarningSeconds` | `60` | Lead time of the idle warning modal ("Tu sesión está por cerrarse" with a countdown, "Seguir conectado" and "Salir"). |
 | `maxSessionHours` | `10` | Maximum session length measured from the OIDC `auth_time` claim (fallback: the `iat` of the first id_token of the session). Counts even while the user is active. `0`/`null` disables it. |
 | `maxSessionWarningMinutes` | `5` | Lead time of the max-session notice ("Tu sesión vence en 5 min, guardá lo que estés haciendo" with an "Entendido" button that only hides it — no extension). |
+| `closeRedirect` | `'home'` | Destination after an automatic close. `'home'` navigates to `postLogoutRedirectUri` (the same place an explicit logout lands) with `?session_closed=idle\|max`; `'login'` keeps the pre-0.5 behavior (`routes.login` with `?reason=idle\|max`). |
 | `sessionTimeouts` | `{ storage: window.localStorage }` | Advanced overrides: injectable `now` clock and `storage` (mainly for tests). |
 
 Timers only run while a user is authenticated — they start after the signin
@@ -194,10 +196,18 @@ When the idle or the max deadline is reached (or the user clicks "Salir"):
 
 - silent renew stops and the OIDC user is removed (`userManager.removeUser()`),
 - the stored token and the store are cleared, the profile retry timer stops,
-- the browser is redirected to the login route (`routes.login`) with
-  `?reason=idle|max`, where `OidcLogin` shows "Tu sesión se cerró por
-  inactividad" / "Tu sesión se cerró por tiempo máximo" for 2.5 s before
-  starting the login redirect.
+- the browser lands where `closeRedirect` points:
+  - `'home'` (default) — the configured `postLogoutRedirectUri` (the same place
+    an explicit logout lands) with `?session_closed=idle|max` appended. When
+    the URI is same-origin the redirect uses `router.replace` (no reload);
+    when it is cross-origin a full navigation (`window.location.assign`) is
+    used; when it is missing the router path `/` is used. Mount
+    [`HydraSessionClosedNotice`](#showing-why-the-session-closed) on that page
+    to tell the user why the session ended.
+  - `'login'` — the login route (`routes.login`) with `?reason=idle|max`,
+    where `OidcLogin` shows "Tu sesión se cerró por inactividad" / "Tu sesión
+    se cerró por tiempo máximo" for 2.5 s before starting the login redirect
+    (the pre-0.5 behavior).
 
 Unlike `logout()`, the automatic close **never** calls the Hydra end-session
 endpoint and **never** removes the last-profile cache
@@ -239,6 +249,27 @@ The store (and `useAuth()`) exposes `sessionExpiresAt`, `idleExpiresAt`,
 `sessionWarning` (`'idle' | 'max' | null`), `closedReason`
 (`'idle' | 'max' | null`, readable on the login page) and the actions
 `stayConnected()` and `closeSession(reason)`.
+
+### Showing why the session closed
+
+With the default `closeRedirect: 'home'`, mount `<HydraSessionClosedNotice />`
+on the public/landing layout (the page `postLogoutRedirectUri` points to). It
+reads `?session_closed=idle|max` (also `?reason=` for backward compatibility)
+and renders a dismissible branded toast — fixed top-center, auto-hidden after
+8 s — with "Tu sesión se cerró por inactividad" / "Tu sesión se cerró por
+tiempo máximo". Dismissing it removes `session_closed` from the URL (keeping
+the other query params); missing/unknown values render nothing.
+
+```vue
+<template>
+  <HydraSessionClosedNotice />
+  <router-view />
+</template>
+
+<script setup>
+import { HydraSessionClosedNotice } from '@munipuno/hydra-auth-vue'
+</script>
+```
 
 ### Security note
 

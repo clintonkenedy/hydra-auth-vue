@@ -15,6 +15,14 @@ import {
   SESSION_EVENT_KEY,
   SESSION_START_KEY,
 } from '../src/sessionTimeouts.js'
+import { navigateToUrl } from '../src/closeRedirect.js'
+
+// jsdom cannot navigate, so the full-page navigation used for cross-origin
+// close redirects is mocked while resolveCloseRedirect stays real.
+vi.mock('../src/closeRedirect.js', async (importOriginal) => {
+  const mod = await importOriginal()
+  return { ...mod, navigateToUrl: vi.fn() }
+})
 
 vi.mock('oidc-client-ts', () => {
   class WebStorageStateStore {
@@ -97,6 +105,7 @@ function dispatchStorage(key, newValue) {
 describe('session timeouts (idle + max session)', () => {
   beforeEach(() => {
     vi.useFakeTimers()
+    vi.mocked(navigateToUrl).mockClear()
     sessionStorage.clear()
     localStorage.clear()
     setActivePinia(createPinia())
@@ -419,8 +428,56 @@ describe('session timeouts (idle + max session)', () => {
     expect(store.closedReason).toBeNull()
   })
 
-  it('HydraSessionGuard redirects to the login route with the reason (S6, S9)', async () => {
-    track(makeAuth())
+  it('default closeRedirect "home" lands on a same-origin postLogoutRedirectUri via the router (S6)', async () => {
+    track(makeAuth({ postLogoutRedirectUri: `${window.location.origin}/` }))
+    const store = signIn()
+    const replace = vi.fn()
+    const wrapper = mount(HydraSessionGuard, {
+      global: { provide: { [routerKey]: { replace } } },
+    })
+
+    await store.closeSession('idle')
+    await nextTick()
+
+    expect(replace).toHaveBeenCalledWith({ path: '/', query: { session_closed: 'idle' } })
+    expect(navigateToUrl).not.toHaveBeenCalled()
+    expect(store.closeRedirectPending).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('default closeRedirect "home" does a full navigation for a cross-origin postLogoutRedirectUri (S6)', async () => {
+    track(makeAuth({ postLogoutRedirectUri: 'http://localhost:9000/' }))
+    const store = signIn()
+    const replace = vi.fn()
+    const wrapper = mount(HydraSessionGuard, {
+      global: { provide: { [routerKey]: { replace } } },
+    })
+
+    await store.closeSession('max')
+    await nextTick()
+
+    expect(navigateToUrl).toHaveBeenCalledWith('http://localhost:9000/?session_closed=max')
+    expect(replace).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
+
+  it('closeRedirect "home" falls back to "/" when postLogoutRedirectUri is missing (S6)', async () => {
+    track(makeAuth({ postLogoutRedirectUri: undefined }))
+    const store = signIn()
+    const replace = vi.fn()
+    const wrapper = mount(HydraSessionGuard, {
+      global: { provide: { [routerKey]: { replace } } },
+    })
+
+    await store.closeSession('idle')
+    await nextTick()
+
+    expect(replace).toHaveBeenCalledWith({ path: '/', query: { session_closed: 'idle' } })
+    wrapper.unmount()
+  })
+
+  it('closeRedirect "login" keeps the pre-0.5 redirect to the login route (S6, S9)', async () => {
+    track(makeAuth({ closeRedirect: 'login' }))
     const store = signIn()
     const replace = vi.fn()
     const wrapper = mount(HydraSessionGuard, {
@@ -431,7 +488,27 @@ describe('session timeouts (idle + max session)', () => {
     await nextTick()
 
     expect(replace).toHaveBeenCalledWith({ path: '/oidc-login', query: { reason: 'max' } })
+    expect(navigateToUrl).not.toHaveBeenCalled()
     expect(store.closeRedirectPending).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('a close broadcast from another tab lands on the same "home" destination (S5, S6)', async () => {
+    track(makeAuth({ postLogoutRedirectUri: `${window.location.origin}/` }))
+    signIn()
+    const replace = vi.fn()
+    const wrapper = mount(HydraSessionGuard, {
+      global: { provide: { [routerKey]: { replace } } },
+    })
+
+    dispatchStorage(
+      SESSION_EVENT_KEY,
+      JSON.stringify({ type: 'close', reason: 'idle', at: Date.now() }),
+    )
+    await vi.advanceTimersByTimeAsync(0)
+    await nextTick()
+
+    expect(replace).toHaveBeenCalledWith({ path: '/', query: { session_closed: 'idle' } })
     wrapper.unmount()
   })
 

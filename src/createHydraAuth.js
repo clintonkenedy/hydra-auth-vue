@@ -36,6 +36,10 @@ const DEFAULT_SESSION_TIMEOUTS = {
  * @param {Storage} [options.storage] Defaults to `window.sessionStorage`.
  * @param {string} [options.tokenStorageKey] Defaults to `token`.
  * @param {object} [options.routes] Defaults to `{ login: '/oidc-login', callback: '/oidc-callback' }`.
+ * @param {('home'|'login')} [options.closeRedirect] Where the browser lands after an
+ *   automatic session close. `'home'` (default) navigates to `postLogoutRedirectUri`
+ *   with `?session_closed=idle|max` (fallback: the router path `/`); `'login'` keeps
+ *   the pre-0.5 behavior (`routes.login` with `?reason=idle|max`).
  * @param {boolean} [options.requireAuthByDefault] Treat every route as protected unless `to.meta.public === true`.
  * @param {object} [options.profileCache] Last-known-profile cache used when the core API is unreachable.
  *   Defaults to `{ enabled: true, storage: window.localStorage, maxAgeSeconds: 86400, retrySeconds: 60 }`.
@@ -61,6 +65,7 @@ export function createHydraAuth(options) {
     storage = window.sessionStorage,
     tokenStorageKey = 'token',
     routes = DEFAULT_ROUTES,
+    closeRedirect = 'home',
     requireAuthByDefault = false,
     profileCache = {},
     idleTimeoutMinutes = DEFAULT_SESSION_TIMEOUTS.idleTimeoutMinutes,
@@ -106,6 +111,8 @@ export function createHydraAuth(options) {
     tokenStorageKey,
     coreApiUrl,
     routes,
+    closeRedirect,
+    postLogoutRedirectUri,
     requireAuthByDefault,
     branding: { ...DEFAULT_BRANDING, ...branding },
     profileCache: profileCacheConfig,
