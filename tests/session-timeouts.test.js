@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import piniaPluginPersistedstate from 'pinia-plugin-persistedstate'
 import { mount } from '@vue/test-utils'
-import { nextTick } from 'vue'
+import { createApp, nextTick } from 'vue'
 import { routerKey } from 'vue-router'
 import {
   createHydraAuth,
@@ -361,6 +362,46 @@ describe('session timeouts (idle + max session)', () => {
     expect(store.user).not.toBeNull()
     expect(store.closedReason).toBeNull()
     expect(localStorage.getItem(SESSION_START_KEY)).toBe(String(iat * 1000))
+  })
+
+  it('after a page reload with restored state the guard still starts the timers (S10)', async () => {
+    // pinia-plugin-persistedstate can restore userLoaded=true and the user
+    // after F5; loadUser() is then skipped, so the guard must start timers.
+    const auth = track(makeAuth())
+    const store = useHydraAuth()
+    store.userLoaded = true
+    store.user = { access_token: 'tok', profile: { sub: SUB, auth_time: nowSeconds() } }
+    expect(auth.context.sessionTimeoutsController).toBeFalsy()
+
+    const next = vi.fn()
+    await auth.guard()({ path: '/perfil', meta: { requiresAuth: true } }, {}, next)
+
+    expect(next).toHaveBeenCalled()
+    expect(auth.context.sessionTimeoutsController).toBeTruthy()
+  })
+
+  it('only profile fields are persisted, never the OIDC user or runtime flags (S10)', async () => {
+    const pinia = createPinia()
+    pinia.use(piniaPluginPersistedstate)
+    // Pinia only applies plugins once installed in a Vue app.
+    createApp({}).use(pinia)
+    setActivePinia(pinia)
+    track(makeAuth())
+    const store = useHydraAuth()
+
+    // $patch notifies subscribers (and the persistence plugin) synchronously.
+    store.$patch({
+      user: { access_token: 'secret-token', profile: { sub: SUB } },
+      userLoaded: true,
+      name: 'Juan',
+      roles: ['admin'],
+    })
+
+    const saved = JSON.parse(sessionStorage.getItem('hydraAuth'))
+    expect(saved).toMatchObject({ name: 'Juan', roles: ['admin'] })
+    expect(saved).not.toHaveProperty('user')
+    expect(saved).not.toHaveProperty('userLoaded')
+    expect(JSON.stringify(saved)).not.toContain('secret-token')
   })
 
   it('signinCallback starts the timers and clears closedReason (S10)', async () => {

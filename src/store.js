@@ -234,6 +234,11 @@ function defineHydraAuthStore(context) {
     persist: {
       key: 'hydraAuth',
       storage: context.storage,
+      // Only profile fields survive a reload. Never persist the OIDC user
+      // (it carries the tokens) nor runtime flags such as userLoaded: if
+      // userLoaded were restored as true, the guard would skip loadUser()
+      // and the session timers would never start after F5.
+      pick: ['id', 'name', 'email', 'alias', 'roles', 'permisos'],
     },
   })
 }

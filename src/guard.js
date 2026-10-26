@@ -22,6 +22,10 @@ export function createGuard(context, useStore) {
 
       if (!auth.userLoaded) {
         await auth.loadUser()
+      } else if (auth.user) {
+        // State restored by a persistence plugin skips loadUser(); make sure
+        // the idle/max-session timers run anyway (idempotent).
+        auth.startSessionTimeouts()
       }
 
       const isListedPublic =
