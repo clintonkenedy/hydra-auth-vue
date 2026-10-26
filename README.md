@@ -46,6 +46,7 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | `tokenStorageKey` | no | `token` | Storage key for the `Bearer <access_token>` value. |
 | `routes` | no | `{ login: '/oidc-login', callback: '/oidc-callback' }` | Route paths the consumer mounts the components on. |
 | `requireAuthByDefault` | no | `false` | When `true`, every route requires auth unless `to.meta.public === true`. |
+| `profileCache` | no | `{ enabled: true, storage: window.localStorage, maxAgeSeconds: 86400, retrySeconds: 60 }` | Last-profile cache used when the core API is down. See [Last-profile cache (core outage)](#last-profile-cache-core-outage). |
 
 The returned plugin object exposes:
 
@@ -123,6 +124,81 @@ In components:
 import { useAuth } from '@munipuno/hydra-auth-vue'
 
 const { user, permisos, hasPermission, isAuthenticated, login, logout } = useAuth()
+```
+
+`useAuth()` also exposes `profileDegraded` (ref, `true` while the profile shown
+comes from the last-profile cache) and `profileFetchedAt` (ref, epoch ms of the
+moment the applied profile was actually fetched).
+
+## Last-profile cache (core outage)
+
+When `GET ${coreApiUrl}/api/user` is unreachable, the SPA keeps working with
+the user's **last known profile** instead of failing the login flow.
+
+### Semantics
+
+- Every successful `fetchProfile()` writes a cache entry under the key
+  `hydraAuth.profile:<sub>` (the OIDC subject — the DNI). The entry stores only
+  `{ sub, fetchedAt, profile: { user: { id, name, alias }, roles, permisos } }`
+  — **never** the token and **never** the email.
+- When `fetchProfile()` fails with a **network error, timeout or HTTP 5xx** and
+  a cache entry exists for the *current* user's sub and is no older than
+  `maxAgeSeconds`, the cached profile is applied, `profileDegraded` becomes
+  `true` and a background retry calls `fetchProfile()` every `retrySeconds`
+  until the core recovers (then degraded mode clears and the timer stops).
+- Any **4xx** (401, 403, 404…), a missing/expired entry or an entry belonging
+  to another sub rethrows the error exactly as before — the
+  `401 invalid_token` re-login path is unchanged.
+- `logout()` removes the current sub's cache entry **before**
+  `signoutRedirect()` and stops the retry timer.
+
+### Security reasoning
+
+This is an **availability** feature, not an authorization bypass:
+
+- Front-side `roles`/`permisos` are **UI-only hints** — the backend enforces
+  real authorization on every request, so a stale cached profile can never
+  grant access the server would deny.
+- The cache key is **per sub**, and an entry for another sub is never applied,
+  so profiles cannot leak between accounts on a shared computer.
+- The entry is **cleared on logout**, so finishing a session on a shared
+  machine leaves nothing behind.
+- Entries expire after `maxAgeSeconds` (default **24 h**).
+- **4xx responses are never cached or served from cache** — authentication and
+  authorization failures always surface immediately.
+
+### Options
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `profileCache.enabled` | `true` | Set to `false` to restore the previous behavior exactly (no cache, every failure rethrows). |
+| `profileCache.storage` | `window.localStorage` | Web Storage for the cache entries. |
+| `profileCache.maxAgeSeconds` | `86400` | Maximum age (24 h) before an entry is considered expired. |
+| `profileCache.retrySeconds` | `60` | Background retry interval while degraded. |
+
+```js
+createHydraAuth({
+  // ...required options
+  profileCache: { maxAgeSeconds: 3600, retrySeconds: 30 },
+})
+```
+
+### Showing the degraded banner
+
+Mount `<HydraDegradedBanner />` once in your layout; it renders nothing unless
+`profileDegraded` is `true`, and otherwise shows a `role="status"` amber bar
+with the text `Sin conexión con el servicio de usuarios — mostrando tu último
+perfil.` (inline styles, no UI framework dependency):
+
+```vue
+<template>
+  <HydraDegradedBanner />
+  <router-view />
+</template>
+
+<script setup>
+import { HydraDegradedBanner } from '@munipuno/hydra-auth-vue'
+</script>
 ```
 
 ## Route setup

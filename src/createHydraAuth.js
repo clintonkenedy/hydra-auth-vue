@@ -10,6 +10,11 @@ export const HYDRA_AUTH_KEY = Symbol('hydra-auth')
 
 const DEFAULT_SCOPE = 'openid profile email offline_access'
 const DEFAULT_ROUTES = { login: '/oidc-login', callback: '/oidc-callback' }
+const DEFAULT_PROFILE_CACHE = {
+  enabled: true,
+  maxAgeSeconds: 86400,
+  retrySeconds: 60,
+}
 
 /**
  * Create the Hydra/OIDC auth plugin.
@@ -25,6 +30,8 @@ const DEFAULT_ROUTES = { login: '/oidc-login', callback: '/oidc-callback' }
  * @param {string} [options.tokenStorageKey] Defaults to `token`.
  * @param {object} [options.routes] Defaults to `{ login: '/oidc-login', callback: '/oidc-callback' }`.
  * @param {boolean} [options.requireAuthByDefault] Treat every route as protected unless `to.meta.public === true`.
+ * @param {object} [options.profileCache] Last-known-profile cache used when the core API is unreachable.
+ *   Defaults to `{ enabled: true, storage: window.localStorage, maxAgeSeconds: 86400, retrySeconds: 60 }`.
  * @returns {{ install(app): void, guard(opts): Function, attach(axiosInstance): object, store: Function, userManager: UserManager }}
  */
 export function createHydraAuth(options) {
@@ -39,7 +46,14 @@ export function createHydraAuth(options) {
     tokenStorageKey = 'token',
     routes = DEFAULT_ROUTES,
     requireAuthByDefault = false,
+    profileCache = {},
   } = options
+
+  const profileCacheConfig = {
+    ...DEFAULT_PROFILE_CACHE,
+    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+    ...profileCache,
+  }
 
   const userManager = new UserManager({
     authority,
@@ -60,6 +74,9 @@ export function createHydraAuth(options) {
     coreApiUrl,
     routes,
     requireAuthByDefault,
+    profileCache: profileCacheConfig,
+    // Interval id of the degraded-mode background retry (see store.fetchProfile).
+    profileRetryTimer: null,
     // In-memory flag guarding against signinRedirect() loops when
     // expiry / renew-error events (or repeated 401s) fire more than once.
     redirecting: false,

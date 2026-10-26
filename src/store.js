@@ -1,6 +1,14 @@
 import { defineStore, storeToRefs } from 'pinia'
 import { computed } from 'vue'
 import axios from 'axios'
+import {
+  isRetriableProfileError,
+  readProfileCache,
+  removeProfileCache,
+  startProfileRetry,
+  stopProfileRetry,
+  writeProfileCache,
+} from './profileCache.js'
 
 let activeContext = null
 let storeDefinition = null
@@ -34,6 +42,11 @@ function defineHydraAuthStore(context) {
       roles: null,
       permisos: null,
       userLoaded: false,
+      // True while the profile shown comes from the last-known-profile cache
+      // because the core API was unreachable.
+      profileDegraded: false,
+      // Epoch ms of the moment the applied profile was actually fetched.
+      profileFetchedAt: null,
     }),
     getters: {
       hasPermission: (state) => (permission) => state.permisos?.includes(permission),
@@ -53,10 +66,14 @@ function defineHydraAuthStore(context) {
       },
       async logout() {
         const ctx = getActiveContext()
+        stopProfileRetry(ctx)
+        removeProfileCache(ctx, this.user?.profile?.sub)
         ctx.clearToken()
         this.clearUser()
         this.user = null
         this.userLoaded = false
+        this.profileDegraded = false
+        this.profileFetchedAt = null
         await ctx.userManager.signoutRedirect()
       },
       async signinCallback() {
@@ -70,11 +87,34 @@ function defineHydraAuthStore(context) {
       async fetchProfile() {
         const ctx = getActiveContext()
         const token = ctx.getToken()
-        const response = await axios.get(`${ctx.coreApiUrl}/api/user`, {
-          headers: token ? { Authorization: token } : {},
-        })
-        this.setUser(response.data)
-        return response.data
+        const sub = this.user?.profile?.sub
+        try {
+          const response = await axios.get(`${ctx.coreApiUrl}/api/user`, {
+            headers: token ? { Authorization: token } : {},
+          })
+          this.setUser(response.data)
+          this.profileDegraded = false
+          this.profileFetchedAt = Date.now()
+          stopProfileRetry(ctx)
+          writeProfileCache(ctx, sub, response.data)
+          return response.data
+        } catch (error) {
+          // Fall back to the last known profile only for availability
+          // failures (network/timeout/5xx). Any 4xx rethrows exactly as
+          // before — 401 invalid_token keeps the existing re-login path.
+          if (!isRetriableProfileError(error)) throw error
+          const cached = readProfileCache(ctx, sub)
+          if (!cached) throw error
+          this.setUser(cached.profile)
+          this.profileDegraded = true
+          this.profileFetchedAt = cached.fetchedAt
+          startProfileRetry(ctx, () => {
+            this.fetchProfile().catch(() => {
+              // Still down: stay degraded and keep retrying.
+            })
+          })
+          return cached.profile
+        }
       },
       setUser(payload) {
         if (payload.user.id) this.id = payload.user.id
@@ -118,11 +158,13 @@ export function useHydraAuth(pinia) {
  */
 export function useAuth() {
   const store = useHydraAuth()
-  const { user, roles, permisos } = storeToRefs(store)
+  const { user, roles, permisos, profileDegraded, profileFetchedAt } = storeToRefs(store)
   return {
     user,
     roles,
     permisos,
+    profileDegraded,
+    profileFetchedAt,
     hasPermission: (permission) => store.hasPermission(permission),
     hasRole: (role) => store.hasRole(role),
     isAuthenticated: computed(() => store.isAuthenticated),
