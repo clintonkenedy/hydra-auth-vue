@@ -2,6 +2,7 @@ import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
 import { setActiveContext, useHydraAuth } from './store.js'
 import { createAttach } from './axios.js'
 import { createGuard } from './guard.js'
+import { DEFAULT_BRANDING } from './branding.js'
 
 /**
  * Injection key under which the auth context is provided by `install(app)`.
@@ -44,6 +45,9 @@ const DEFAULT_SESSION_TIMEOUTS = {
  * @param {number} [options.maxSessionWarningMinutes] Max-session warning lead time (default 5).
  * @param {object} [options.sessionTimeouts] Advanced overrides for the session timers
  *   (`now` clock and `storage`, defaults `Date.now` / `window.localStorage`).
+ * @param {object} [options.branding] Look & feel of the package-owned auth screens.
+ *   Defaults to `{ logo: null, title: null, primaryColor: '#00aeee', primaryHoverColor: '#00caee',
+ *   primaryActiveColor: '#16759f', fontFamily: <system sans-serif stack> }`.
  * @returns {{ install(app): void, guard(opts): Function, attach(axiosInstance): object, store: Function, userManager: UserManager }}
  */
 export function createHydraAuth(options) {
@@ -64,6 +68,7 @@ export function createHydraAuth(options) {
     maxSessionHours = DEFAULT_SESSION_TIMEOUTS.maxSessionHours,
     maxSessionWarningMinutes = DEFAULT_SESSION_TIMEOUTS.maxSessionWarningMinutes,
     sessionTimeouts = {},
+    branding = {},
   } = options
 
   const profileCacheConfig = {
@@ -102,6 +107,7 @@ export function createHydraAuth(options) {
     coreApiUrl,
     routes,
     requireAuthByDefault,
+    branding: { ...DEFAULT_BRANDING, ...branding },
     profileCache: profileCacheConfig,
     sessionTimeouts: sessionTimeoutsConfig,
     // Session-timeouts controller (see sessionTimeouts.js); created by the

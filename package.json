@@ -1,6 +1,6 @@
 {
   "name": "@munipuno/hydra-auth-vue",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Shared Hydra/OIDC authentication client for the municipal Vue 3 SPAs (oidc-client-ts + Pinia + vue-router + axios).",
   "type": "module",
   "main": "src/index.js",

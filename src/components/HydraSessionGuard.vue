@@ -1,62 +1,19 @@
 <template>
   <div
     v-if="sessionWarning === 'idle'"
+    class="hydra-session-overlay"
     role="dialog"
     aria-modal="true"
-    :style="{
-      position: 'fixed',
-      inset: '0',
-      zIndex: '9999',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    }"
+    :style="cssVars"
   >
-    <div
-      :style="{
-        backgroundColor: '#ffffff',
-        color: '#111827',
-        borderRadius: '8px',
-        padding: '24px',
-        maxWidth: '360px',
-        width: '90%',
-        textAlign: 'center',
-        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
-        fontSize: '15px',
-      }"
-    >
-      <p :style="{ fontWeight: '600', fontSize: '17px', margin: '0 0 8px' }">
-        Tu sesión está por cerrarse
-      </p>
-      <p :style="{ margin: '0 0 16px' }">{{ idleCountdownText }}</p>
-      <div :style="{ display: 'flex', gap: '8px', justifyContent: 'center' }">
-        <button
-          type="button"
-          :style="{
-            backgroundColor: '#1d4ed8',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '6px',
-            padding: '8px 16px',
-            cursor: 'pointer',
-          }"
-          @click="stay"
-        >
+    <div class="hydra-session-card">
+      <p class="hydra-session-title">Tu sesión está por cerrarse</p>
+      <p class="hydra-session-text">{{ idleCountdownText }}</p>
+      <div class="hydra-session-actions">
+        <button type="button" class="hydra-btn-primary" @click="stay">
           Seguir conectado
         </button>
-        <button
-          type="button"
-          :style="{
-            backgroundColor: '#ffffff',
-            color: '#b91c1c',
-            border: '1px solid #b91c1c',
-            borderRadius: '6px',
-            padding: '8px 16px',
-            cursor: 'pointer',
-          }"
-          @click="exitNow"
-        >
+        <button type="button" class="hydra-btn-secondary" @click="exitNow">
           Salir
         </button>
       </div>
@@ -64,36 +21,14 @@
   </div>
   <div
     v-else-if="sessionWarning === 'max' && !maxNoticeDismissed"
+    class="hydra-session-notice"
     role="alert"
-    :style="{
-      position: 'fixed',
-      bottom: '16px',
-      left: '50%',
-      transform: 'translateX(-50%)',
-      zIndex: '9999',
-      display: 'flex',
-      alignItems: 'center',
-      gap: '12px',
-      backgroundColor: '#fef3c7',
-      color: '#92400e',
-      border: '1px solid #f59e0b',
-      borderRadius: '8px',
-      padding: '10px 16px',
-      fontSize: '14px',
-      boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-    }"
+    :style="cssVars"
   >
     <span>Tu sesión vence en 5 min, guardá lo que estés haciendo</span>
     <button
       type="button"
-      :style="{
-        backgroundColor: 'transparent',
-        color: '#92400e',
-        border: '1px solid #92400e',
-        borderRadius: '6px',
-        padding: '4px 10px',
-        cursor: 'pointer',
-      }"
+      class="hydra-session-notice-btn"
       @click="maxNoticeDismissed = true"
     >
       Entendido
@@ -106,6 +41,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { getActiveContext, useHydraAuth } from '../store.js'
+import { brandingCssVars, resolveBranding } from '../branding.js'
 
 // Renders the idle-warning modal (S2) and the max-session notice (S4), and
 // redirects to the login route after an automatic close (S6). Mount it once
@@ -113,6 +49,14 @@ import { getActiveContext, useHydraAuth } from '../store.js'
 const store = useHydraAuth()
 const router = useRouter()
 const { sessionWarning, idleExpiresAt, closeRedirectPending, closedReason } = storeToRefs(store)
+
+let context = null
+try {
+  context = getActiveContext()
+} catch {
+  // Standalone mount without createHydraAuth(): fall back to defaults.
+}
+const cssVars = brandingCssVars(resolveBranding(context))
 
 // "Entendido" only hides the max-session notice — no extension (S4).
 const maxNoticeDismissed = ref(false)
@@ -162,3 +106,121 @@ watch(
   { immediate: true },
 )
 </script>
+
+<style scoped>
+.hydra-session-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.5);
+  font-family: var(--hydra-font-family);
+}
+
+.hydra-session-card {
+  background-color: #ffffff;
+  color: #111827;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  max-width: 360px;
+  width: 90%;
+  text-align: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+  font-size: 15px;
+}
+
+.hydra-session-title {
+  font-weight: 600;
+  font-size: 17px;
+  margin: 0 0 8px;
+}
+
+.hydra-session-text {
+  margin: 0 0 16px;
+  color: #374151;
+}
+
+.hydra-session-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.hydra-btn-primary {
+  background-color: var(--hydra-primary);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  cursor: pointer;
+}
+
+.hydra-btn-primary:hover {
+  background-color: var(--hydra-primary-hover);
+}
+
+.hydra-btn-primary:focus,
+.hydra-btn-primary:active {
+  background-color: var(--hydra-primary-active);
+}
+
+.hydra-btn-primary:focus-visible {
+  outline: 2px solid var(--hydra-primary-active);
+  outline-offset: 2px;
+}
+
+.hydra-btn-secondary {
+  background-color: #ffffff;
+  color: #b91c1c;
+  font-family: inherit;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  border: 1px solid #b91c1c;
+  border-radius: 0.5rem;
+  padding: 0.625rem 1rem;
+  cursor: pointer;
+}
+
+.hydra-btn-secondary:hover {
+  background-color: #fef2f2;
+}
+
+.hydra-btn-secondary:focus-visible {
+  outline: 2px solid #b91c1c;
+  outline-offset: 2px;
+}
+
+.hydra-session-notice {
+  position: fixed;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background-color: #fef3c7;
+  color: #92400e;
+  border: 1px solid #f59e0b;
+  border-radius: 0.75rem;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-family: var(--hydra-font-family);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.hydra-session-notice-btn {
+  background-color: transparent;
+  color: #92400e;
+  font-family: inherit;
+  border: 1px solid #92400e;
+  border-radius: 0.5rem;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+</style>

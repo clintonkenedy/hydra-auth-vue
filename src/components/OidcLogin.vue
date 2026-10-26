@@ -1,14 +1,21 @@
 <template>
-  <div class="hydra-auth-login">
-    <p v-if="closeMessage">{{ closeMessage }}</p>
+  <HydraAuthScreen :variant="closeMessage ? 'info' : 'loading'">
+    <template v-if="closeMessage">
+      <p class="hydra-auth-message">{{ closeMessage }}</p>
+      <p class="hydra-auth-muted">Te llevaremos al inicio de sesión…</p>
+      <button type="button" class="hydra-btn-primary" @click="auth.login()">
+        Iniciar sesión
+      </button>
+    </template>
     <p v-else>Redirigiendo al inicio de sesión…</p>
-  </div>
+  </HydraAuthScreen>
 </template>
 
 <script setup>
 import { onBeforeUnmount, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useHydraAuth } from '../store.js'
+import HydraAuthScreen from './HydraAuthScreen.vue'
 
 // Messages shown when the session was closed automatically (S6). The reason
 // comes from the `?reason=idle|max` query param or from `closedReason` in the

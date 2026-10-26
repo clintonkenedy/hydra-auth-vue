@@ -9,6 +9,7 @@
       padding: '8px 16px',
       fontSize: '14px',
       textAlign: 'center',
+      fontFamily: branding.fontFamily,
     }"
   >
     Sin conexión con el servicio de usuarios — mostrando tu último perfil.
@@ -17,8 +18,17 @@
 
 <script setup>
 import { storeToRefs } from 'pinia'
-import { useHydraAuth } from '../store.js'
+import { getActiveContext, useHydraAuth } from '../store.js'
+import { resolveBranding } from '../branding.js'
 
 // Renders nothing unless the store is in degraded (cached-profile) mode.
 const { profileDegraded } = storeToRefs(useHydraAuth())
+
+let context = null
+try {
+  context = getActiveContext()
+} catch {
+  // Standalone mount without createHydraAuth(): fall back to defaults.
+}
+const branding = resolveBranding(context)
 </script>

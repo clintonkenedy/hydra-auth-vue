@@ -1,17 +1,18 @@
 <template>
-  <div class="hydra-auth-callback">
-    <div v-if="error">
-      <p>No se pudo completar el inicio de sesión.</p>
-      <button type="button" @click="run">Reintentar</button>
-    </div>
-    <p v-else>Procesando login…</p>
-  </div>
+  <HydraAuthScreen :variant="error ? 'error' : 'loading'">
+    <template v-if="error">
+      <p class="hydra-auth-message">No se pudo completar el inicio de sesión.</p>
+      <button type="button" class="hydra-btn-primary" @click="run">Reintentar</button>
+    </template>
+    <p v-else>Procesando inicio de sesión…</p>
+  </HydraAuthScreen>
 </template>
 
 <script setup>
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useHydraAuth, getActiveContext } from '../store.js'
+import HydraAuthScreen from './HydraAuthScreen.vue'
 
 const auth = useHydraAuth()
 const router = useRouter()

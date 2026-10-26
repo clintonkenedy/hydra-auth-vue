@@ -49,6 +49,7 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | `profileCache` | no | `{ enabled: true, storage: window.localStorage, maxAgeSeconds: 86400, retrySeconds: 60 }` | Last-profile cache used when the core API is down. See [Last-profile cache (core outage)](#last-profile-cache-core-outage). |
 | `idleTimeoutMinutes` | no | `60` | Inactivity timeout. See [Session timeouts](#session-timeouts). |
 | `maxSessionHours` | no | `10` | Maximum session length. See [Session timeouts](#session-timeouts). |
+| `branding` | no | see [Branding](#branding) | Look & feel of the package-owned auth screens (logo, title, colors, font). |
 
 The returned plugin object exposes:
 
@@ -60,6 +61,38 @@ The returned plugin object exposes:
 The store declares `persist: { key: 'hydraAuth', storage }`, which is picked up
 automatically when the consumer installs `pinia-plugin-persistedstate` — the
 plugin is optional and never required by this package.
+
+## Branding
+
+The package-owned screens (`OidcLogin`, `OidcCallback`, `HydraSessionGuard`) are
+styled to match the municipal IdP login page. The `branding` option customizes
+that look without any CSS framework:
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `logo` | `null` | Image URL shown centered above the content (rendered only when set, `alt="Logo"`). |
+| `title` | `null` | Heading shown under the logo (rendered only when set). |
+| `primaryColor` | `#00aeee` | Primary button background. |
+| `primaryHoverColor` | `#00caee` | Primary button `:hover` background. |
+| `primaryActiveColor` | `#16759f` | Primary button `:focus`/`:active` background. |
+| `fontFamily` | system sans-serif stack | Font family applied to the auth screens. |
+
+```js
+const hydraAuth = createHydraAuth({
+  // ...required options...
+  branding: {
+    logo: '/inicio_login.jpg',
+    title: 'Provedor de identidad Municipalidad Puno',
+  },
+})
+```
+
+The resolved branding is available as `useAuth().branding`, and the shared
+layout component is exported as `HydraAuthScreen` (props: `variant` —
+`'info' | 'error' | 'loading'` — plus a default slot). The colors are exposed
+to the scoped styles as CSS custom properties (`--hydra-primary`,
+`--hydra-primary-hover`, `--hydra-primary-active`, `--hydra-font-family`), and
+the primary button class is `.hydra-btn-primary`.
 
 ## Quasar boot example (front-sistrans wiring)
 

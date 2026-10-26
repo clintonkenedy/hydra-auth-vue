@@ -14,6 +14,7 @@ import {
   clearSessionState,
   createSessionTimeouts,
 } from './sessionTimeouts.js'
+import { resolveBranding } from './branding.js'
 
 let activeContext = null
 let storeDefinition = null
@@ -280,6 +281,7 @@ export function useAuth() {
     idleExpiresAt,
     sessionWarning,
     closedReason,
+    branding: resolveBranding(getActiveContext()),
     hasPermission: (permission) => store.hasPermission(permission),
     hasRole: (role) => store.hasRole(role),
     isAuthenticated: computed(() => store.isAuthenticated),
