@@ -12,7 +12,7 @@ Git-installable (tagged release):
 ```json
 {
   "dependencies": {
-    "@munipuno/hydra-auth-vue": "github:MuniPuno/hydra-auth-vue#v0.1.0"
+    "@munipuno/hydra-auth-vue": "github:clintonkenedy/hydra-auth-vue#v0.1.0"
   }
 }
 ```
