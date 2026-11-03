@@ -51,12 +51,13 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | `idleTimeoutMinutes` | no | `60` | Inactivity timeout. See [Session timeouts](#session-timeouts). |
 | `maxSessionHours` | no | `10` | Maximum session length. See [Session timeouts](#session-timeouts). |
 | `branding` | no | see [Branding](#branding) | Look & feel of the package-owned auth screens (logo, title, colors, font). |
+| `resources` | no | `{}` | One token per API: `name -> { audience, scope?, silentRequestTimeoutInSeconds? }`. See [Varios tokens por API (resources)](#varios-tokens-por-api-resources). |
 
 The returned plugin object exposes:
 
 - `install(app)` — provides the auth context under `HYDRA_AUTH_KEY`.
 - `guard(opts)` — returns a `router.beforeEach` handler (`opts.public`: array of public paths/names).
-- `attach(axiosInstance)` — adds request/response interceptors; returns `{ request, response }` ids for `eject`.
+- `attach(axiosInstance, { resource }?)` — adds request/response interceptors; returns `{ request, response }` ids for `eject`. With `{ resource: name }` the instance uses that resource's token (see [Varios tokens por API (resources)](#varios-tokens-por-api-resources)).
 - `store` — the `useHydraAuth` Pinia store (id `hydraAuth`).
 
 The store declares `persist: { key: 'hydraAuth', storage }`, which is picked up
@@ -167,6 +168,85 @@ comes from the last-profile cache) and `profileFetchedAt` (ref, epoch ms of the
 moment the applied profile was actually fetched), plus the session-timeout
 surface: `sessionExpiresAt`, `idleExpiresAt`, `sessionWarning`, `closedReason`
 (refs) and the `stayConnected()` / `closeSession(reason)` actions described in [Session timeouts](#session-timeouts).
+
+## Varios tokens por API (resources)
+
+By default every attached axios instance sends the primary access token. With
+`resources` each API gets **its own access token**, issued by Hydra for that
+API's `audience` (one token per API, RFC 8707 style).
+
+### Hydra prerequisite
+
+The OIDC client must allow the audience: add it to the client's `audience`
+allow-list (e.g. `audience: ["sistrans-local"]` on `usuarios-local`). Hydra
+refuses a non-allowed audience with `invalid_request`, and that resource's
+requests reject with the error.
+
+The silent request crosses Hydra, the IdP login (which must accept a
+remembered session without UI) and consent pages, and this app's callback
+route; it gets 30 s by default (`silentRequestTimeoutInSeconds` per resource)
+instead of oidc-client-ts's 10 s. A timeout surfaces as `ErrorTimeout: IFrame
+timed out without a response`.
+
+### Configuration
+
+```js
+export const hydraAuth = createHydraAuth({
+  // ...required options...
+  resources: {
+    sistrans: { audience: 'sistrans-local' },
+    // scope is optional; defaults to the primary `scope`
+    rentas: { audience: 'rentas-local', scope: 'openid offline_access' },
+  },
+})
+
+hydraAuth.attach(apiCore) // primary token, unchanged
+hydraAuth.attach(apiSistrans, { resource: 'sistrans' }) // sistrans token
+```
+
+Without `resources` (or with `{}`) the package behaves exactly as before.
+`attach(instance, { resource: 'nope' })` with an undeclared name throws
+`hydra-auth: unknown resource "nope"; declare it in createHydraAuth({ resources })`.
+
+### Behavior
+
+- **Lazy acquisition** — the first request on a resource-attached instance
+  obtains the token in the background with a silent authorize
+  (`signinSilent({ extraQueryParams: { audience }, scope? })`, `prompt=none`,
+  hidden iframe, no UI). Concurrent first requests share one acquisition. The
+  iframe lands on the callback route (`redirectUri`); `OidcCallback` hands the
+  silent response to the parent window and never touches the primary session.
+- **Isolation** — each resource uses its own internal `UserManager` (same
+  authority/client settings, in-memory user store, no automatic renew), so the
+  primary user/token and its events are never replaced by a resource user.
+- **Storage** — `Bearer <access_token>` under
+  `<tokenStorageKey>:resource:<name>` (default `token:resource:<name>`) in the
+  same `storage` as the primary token. Never the id_token; the resource user
+  (refresh_token, expiry) lives only in memory, never in `localStorage`.
+- **Renewal** — when the token is expired or expires within 60 s, the next
+  request renews it first (refresh_token when present, otherwise a silent
+  authorize). If a refreshed JWT no longer carries the audience, a fresh silent
+  authorize is used. A failed renewal clears that resource token and rejects
+  the request with the underlying error — it **never** redirects to login (the
+  primary session is still valid).
+- **401** — a `401 {"error":"invalid_token"}` on a resource-attached instance
+  clears only that resource token; the next request acquires a new one. It
+  never triggers the login redirect.
+- **Logout** — `logout()`, the automatic session close and any primary token
+  clear also clear every resource token and in-memory resource user, and
+  best-effort revoke them (`revokeTokens`, errors ignored).
+
+### Still to confirm in the browser
+
+Verified against a local Hydra v2 (client_credentials): an allowed audience
+yields `aud: ["sistrans-local"]`, a non-allowed one fails with
+`invalid_request`. Pending confirmation in a real browser session:
+
+- the silent authorize with `audience` and `prompt=none` returns a token
+  without UI once the primary session exists (third-party cookie / iframe
+  restrictions apply when Hydra is on another site),
+- consent for the audience is remembered,
+- a refreshed resource token keeps its `aud`.
 
 ## Session timeouts
 
