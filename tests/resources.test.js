@@ -252,6 +252,31 @@ describe('resource tokens (F5)', () => {
       expect(settings.userStore.store.constructor.name).toBe('InMemoryWebStorage')
     })
 
+    // The silent authorize crosses Hydra, the IdP login and consent pages and
+    // the SPA callback; oidc-client-ts's default 10 s is too short for that
+    // chain (seen in the browser: "IFrame timed out without a response").
+    it('gives the silent request 30 s by default', async () => {
+      const auth = makeAuth({ resources: RESOURCES })
+      const instance = okInstance([])
+
+      auth.attach(instance, { resource: 'sistrans' })
+      await instance.get('/x')
+
+      expect(resourceManagers()[0].settings.silentRequestTimeoutInSeconds).toBe(30)
+    })
+
+    it('lets a resource override the silent request timeout', async () => {
+      const auth = makeAuth({
+        resources: { sistrans: { audience: 'sistrans-local', silentRequestTimeoutInSeconds: 45 } },
+      })
+      const instance = okInstance([])
+
+      auth.attach(instance, { resource: 'sistrans' })
+      await instance.get('/x')
+
+      expect(resourceManagers()[0].settings.silentRequestTimeoutInSeconds).toBe(45)
+    })
+
     it('two concurrent first requests share one signinSilent', async () => {
       const auth = makeAuth({ resources: RESOURCES })
       const seen = []

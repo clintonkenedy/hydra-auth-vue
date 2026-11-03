@@ -2,6 +2,11 @@ import { InMemoryWebStorage, UserManager, WebStorageStateStore } from 'oidc-clie
 
 // Renew a resource token when it expires within this window (S5).
 const RENEW_BEFORE_MS = 60_000
+// The silent authorize crosses Hydra, the IdP login (skip) and consent pages
+// and the SPA callback route; oidc-client-ts's default of 10 s is too short
+// for that chain, especially with dev servers. Per-resource override:
+// `resources.<name>.silentRequestTimeoutInSeconds`.
+const DEFAULT_SILENT_TIMEOUT_S = 30
 
 export function unknownResourceError(name) {
   return new Error(
@@ -76,6 +81,8 @@ export function createResourceTokens(context, resourcesOption = {}) {
           automaticSilentRenew: false,
           loadUserInfo: false,
           monitorSession: false,
+          silentRequestTimeoutInSeconds:
+            resources[name].silentRequestTimeoutInSeconds ?? DEFAULT_SILENT_TIMEOUT_S,
           userStore: new WebStorageStateStore({ store: new InMemoryWebStorage() }),
         }),
       )

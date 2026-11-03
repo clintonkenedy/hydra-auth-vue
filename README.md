@@ -51,7 +51,7 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | `idleTimeoutMinutes` | no | `60` | Inactivity timeout. See [Session timeouts](#session-timeouts). |
 | `maxSessionHours` | no | `10` | Maximum session length. See [Session timeouts](#session-timeouts). |
 | `branding` | no | see [Branding](#branding) | Look & feel of the package-owned auth screens (logo, title, colors, font). |
-| `resources` | no | `{}` | One token per API: `name -> { audience, scope? }`. See [Varios tokens por API (resources)](#varios-tokens-por-api-resources). |
+| `resources` | no | `{}` | One token per API: `name -> { audience, scope?, silentRequestTimeoutInSeconds? }`. See [Varios tokens por API (resources)](#varios-tokens-por-api-resources). |
 
 The returned plugin object exposes:
 
@@ -181,6 +181,12 @@ The OIDC client must allow the audience: add it to the client's `audience`
 allow-list (e.g. `audience: ["sistrans-local"]` on `usuarios-local`). Hydra
 refuses a non-allowed audience with `invalid_request`, and that resource's
 requests reject with the error.
+
+The silent request crosses Hydra, the IdP login (which must accept a
+remembered session without UI) and consent pages, and this app's callback
+route; it gets 30 s by default (`silentRequestTimeoutInSeconds` per resource)
+instead of oidc-client-ts's 10 s. A timeout surfaces as `ErrorTimeout: IFrame
+timed out without a response`.
 
 ### Configuration
 
