@@ -1,0 +1,25 @@
+<!doctype html>
+<!--
+  @munipuno/hydra-auth-vue silent-callback page.
+  Target of `silentRedirectUri` for hidden-iframe silent authorizes (resource
+  tokens): it hands the authorize response URL to the parent window
+  (oidc-client-ts IFrameWindow) without loading the SPA. Must be served from
+  the SPA origin (copy it to `public/`) and registered in the Hydra client's
+  `redirect_uris`. No dependencies, no UI.
+-->
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>oidc silent callback</title>
+  </head>
+  <body>
+    <script>
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(
+          { source: 'oidc-client', url: window.location.href, keepOpen: false },
+          window.location.origin,
+        )
+      }
+    </script>
+  </body>
+</html>
