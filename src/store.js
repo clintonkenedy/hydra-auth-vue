@@ -19,6 +19,15 @@ import { resolveBranding } from './branding.js'
 let activeContext = null
 let storeDefinition = null
 
+function isInsideIframe() {
+  try {
+    return typeof window !== 'undefined' && window.parent != null && window.parent !== window
+  } catch {
+    // Cross-origin parent: still an iframe.
+    return true
+  }
+}
+
 /**
  * Bind the store to an auth context. Called by `createHydraAuth()`.
  */
@@ -101,7 +110,19 @@ function defineHydraAuthStore(context) {
       },
       async signinCallback() {
         const ctx = getActiveContext()
-        const user = await ctx.userManager.signinRedirectCallback()
+        let user
+        if (isInsideIframe()) {
+          // Resource tokens (F5) run a silent authorize in an iframe that lands
+          // on this callback route. signinCallback() dispatches by request type:
+          // a silent response is handed to the parent window (which owns the
+          // resource UserManager) and never touches the primary user/token.
+          user = await ctx.userManager.signinCallback()
+          // Silent callback: the parent removes this iframe; stay pending so
+          // the callback page does not fetch the profile or navigate.
+          if (!user) return new Promise(() => {})
+        } else {
+          user = await ctx.userManager.signinRedirectCallback()
+        }
         this.user = user
         this.userLoaded = true
         ctx.setToken(user)

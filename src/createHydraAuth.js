@@ -1,6 +1,7 @@
 import { UserManager, WebStorageStateStore } from 'oidc-client-ts'
 import { setActiveContext, useHydraAuth } from './store.js'
 import { createAttach } from './axios.js'
+import { createResourceTokens } from './resources.js'
 import { createGuard } from './guard.js'
 import { DEFAULT_BRANDING } from './branding.js'
 
@@ -52,7 +53,10 @@ const DEFAULT_SESSION_TIMEOUTS = {
  * @param {object} [options.branding] Look & feel of the package-owned auth screens.
  *   Defaults to `{ logo: null, title: null, primaryColor: '#00aeee', primaryHoverColor: '#00caee',
  *   primaryActiveColor: '#16759f', fontFamily: <system sans-serif stack> }`.
- * @returns {{ install(app): void, guard(opts): Function, attach(axiosInstance): object, store: Function, userManager: UserManager }}
+ * @param {Object<string, {audience: string, scope?: string}>} [options.resources]
+ *   One token per API: `name -> { audience, scope? }`. Use with
+ *   `attach(axiosInstance, { resource: name })`. Absent/empty: unchanged behavior.
+ * @returns {{ install(app): void, guard(opts): Function, attach(axiosInstance, opts?): object, store: Function, userManager: UserManager }}
  */
 export function createHydraAuth(options) {
   const {
@@ -74,6 +78,7 @@ export function createHydraAuth(options) {
     maxSessionWarningMinutes = DEFAULT_SESSION_TIMEOUTS.maxSessionWarningMinutes,
     sessionTimeouts = {},
     branding = {},
+    resources = {},
   } = options
 
   const profileCacheConfig = {
@@ -132,7 +137,14 @@ export function createHydraAuth(options) {
     // Always store the access_token (never the id_token).
     storage.setItem(tokenStorageKey, 'Bearer ' + user.access_token)
   }
-  context.clearToken = () => storage.removeItem(tokenStorageKey)
+  // Resource tokens (F5): one token per API, see resources.js. Clearing the
+  // primary token (logout, close, expiry, 401) also clears and best-effort
+  // revokes every resource token.
+  context.resources = createResourceTokens(context, resources)
+  context.clearToken = () => {
+    storage.removeItem(tokenStorageKey)
+    context.resources.revokeAll()
+  }
   context.redirectToLoginOnce = async () => {
     if (context.redirecting) return
     context.redirecting = true
