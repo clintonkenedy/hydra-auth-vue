@@ -31,6 +31,10 @@ const DEFAULT_SESSION_TIMEOUTS = {
  * @param {string} options.authority OIDC authority (Hydra public URL).
  * @param {string} options.clientId OIDC client id.
  * @param {string} options.redirectUri Redirect URI (callback route).
+ * @param {string} [options.silentRedirectUri] Silent-callback URI used by hidden-iframe
+ *   silent authorizes (primary and resource managers). Defaults to `redirectUri`;
+ *   point it at the shipped `assets/oidc-silent-callback.html` (served from the SPA
+ *   origin and registered in the Hydra client) so the iframe does not load the SPA.
  * @param {string} options.postLogoutRedirectUri Post-logout redirect URI.
  * @param {string} [options.scope] Defaults to `openid profile email offline_access`.
  * @param {string} options.coreApiUrl Base URL used to fetch `/api/user`.
@@ -63,6 +67,7 @@ export function createHydraAuth(options) {
     authority,
     clientId,
     redirectUri,
+    silentRedirectUri = redirectUri,
     postLogoutRedirectUri,
     scope = DEFAULT_SCOPE,
     coreApiUrl,
@@ -102,6 +107,7 @@ export function createHydraAuth(options) {
     authority,
     client_id: clientId,
     redirect_uri: redirectUri,
+    silent_redirect_uri: silentRedirectUri,
     post_logout_redirect_uri: postLogoutRedirectUri,
     response_type: 'code',
     scope,

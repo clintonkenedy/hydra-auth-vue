@@ -73,8 +73,9 @@ export function createResourceTokens(context, resourcesOption = {}) {
           client_id: primary.client_id,
           redirect_uri: primary.redirect_uri,
           post_logout_redirect_uri: primary.post_logout_redirect_uri,
-          // The iframe lands on the already-registered callback route; the
-          // store's signinCallback() dispatches it as a silent callback.
+          // `silentRedirectUri` (default: the callback route, where the
+          // store's signinCallback() dispatches it as a silent callback; or
+          // the shipped assets/oidc-silent-callback.html page).
           silent_redirect_uri: primary.silent_redirect_uri ?? primary.redirect_uri,
           response_type: 'code',
           scope: primary.scope,

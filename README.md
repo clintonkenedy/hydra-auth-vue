@@ -39,6 +39,7 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | `authority` | yes | — | OIDC authority (Hydra public URL). |
 | `clientId` | yes | — | OIDC client id. |
 | `redirectUri` | yes | — | Redirect URI pointing at the callback route. |
+| `silentRedirectUri` | no | `redirectUri` | Target of hidden-iframe silent authorizes (primary and resources). See [Página de silent callback](#página-de-silent-callback-silentredirecturi). |
 | `postLogoutRedirectUri` | yes | — | Where Hydra sends the browser after logout. |
 | `scope` | no | `openid profile email offline_access` | Requested scopes. |
 | `coreApiUrl` | yes | — | Base URL used by `fetchProfile()` to GET `/api/user`. |
@@ -214,8 +215,10 @@ Without `resources` (or with `{}`) the package behaves exactly as before.
   obtains the token in the background with a silent authorize
   (`signinSilent({ extraQueryParams: { audience }, scope? })`, `prompt=none`,
   hidden iframe, no UI). Concurrent first requests share one acquisition. The
-  iframe lands on the callback route (`redirectUri`); `OidcCallback` hands the
-  silent response to the parent window and never touches the primary session.
+  iframe lands on `silentRedirectUri` (default: the callback route, where
+  `OidcCallback` hands the silent response to the parent window and never
+  touches the primary session; see
+  [Página de silent callback](#página-de-silent-callback-silentredirecturi)).
 - **Isolation** — each resource uses its own internal `UserManager` (same
   authority/client settings, in-memory user store, no automatic renew), so the
   primary user/token and its events are never replaced by a resource user.
@@ -235,6 +238,35 @@ Without `resources` (or with `{}`) the package behaves exactly as before.
 - **Logout** — `logout()`, the automatic session close and any primary token
   clear also clear every resource token and in-memory resource user, and
   best-effort revoke them (`revokeTokens`, errors ignored).
+
+### Página de silent callback (`silentRedirectUri`)
+
+**Why:** by default the hidden iframe of the silent authorize lands on the
+callback route, so it loads the **whole SPA** (bundle, router, Pinia,
+`OidcCallback`) just to pass the response URL to the parent window. The
+package ships a tiny dependency-free page that does only that.
+
+1. Copy `node_modules/@munipuno/hydra-auth-vue/assets/oidc-silent-callback.html`
+   to the SPA's `public/` (it must be served from the SPA origin).
+2. Set the option:
+
+   ```js
+   createHydraAuth({
+     // ...
+     silentRedirectUri: `${window.location.origin}/oidc-silent-callback.html`,
+   })
+   ```
+
+3. Register that exact URI (e.g. `https://app.munipuno.gob.pe/oidc-silent-callback.html`)
+   in the Hydra client's `redirect_uris` — from the core's **Accesos (clients)**
+   tab. Hydra rejects an unregistered redirect URI.
+
+The page posts `{ source: 'oidc-client', url: location.href, keepOpen: false }`
+to `window.parent` with `targetOrigin = location.origin` (what oidc-client-ts
+expects), does nothing when opened top-level, and renders no UI.
+
+Without `silentRedirectUri` everything keeps working through the normal
+callback route (`redirectUri`).
 
 ### Still to confirm in the browser
 

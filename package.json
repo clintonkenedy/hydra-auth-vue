@@ -9,6 +9,7 @@
   },
   "files": [
     "src",
+    "assets",
     "README.md"
   ],
   "scripts": {

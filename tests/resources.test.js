@@ -252,6 +252,23 @@ describe('resource tokens (F5)', () => {
       expect(settings.userStore.store.constructor.name).toBe('InMemoryWebStorage')
     })
 
+    // S9: a dedicated silent-callback page keeps the hidden iframe from
+    // loading the whole SPA on the callback route.
+    it('uses silentRedirectUri as the resource silent_redirect_uri when set', async () => {
+      const auth = makeAuth({
+        resources: RESOURCES,
+        silentRedirectUri: 'http://localhost/oidc-silent-callback.html',
+      })
+      const instance = okInstance([])
+
+      auth.attach(instance, { resource: 'sistrans' })
+      await instance.get('/x')
+
+      const settings = resourceManagers()[0].settings
+      expect(settings.silent_redirect_uri).toBe('http://localhost/oidc-silent-callback.html')
+      expect(settings.redirect_uri).toBe(BASE_OPTIONS.redirectUri)
+    })
+
     // The silent authorize crosses Hydra, the IdP login and consent pages and
     // the SPA callback; oidc-client-ts's default 10 s is too short for that
     // chain (seen in the browser: "IFrame timed out without a response").
