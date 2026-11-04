@@ -39,7 +39,7 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | `authority` | yes | — | OIDC authority (Hydra public URL). |
 | `clientId` | yes | — | OIDC client id. |
 | `redirectUri` | yes | — | Redirect URI pointing at the callback route. |
-| `silentRedirectUri` | no | `redirectUri` | Target of hidden-iframe silent authorizes (primary and resources). See [Página de silent callback](#página-de-silent-callback-silentredirecturi). |
+| `silentRedirectUri` | no | derived (see below) | Target of hidden-iframe silent authorizes (primary and resources). See [Página de silent callback](#página-de-silent-callback-silentredirecturi). |
 | `postLogoutRedirectUri` | yes | — | Where Hydra sends the browser after logout. |
 | `scope` | no | `openid profile email offline_access` | Requested scopes. |
 | `coreApiUrl` | yes | — | Base URL used by `fetchProfile()` to GET `/api/user`. |
@@ -241,32 +241,41 @@ Without `resources` (or with `{}`) the package behaves exactly as before.
 
 ### Página de silent callback (`silentRedirectUri`)
 
-**Why:** by default the hidden iframe of the silent authorize lands on the
-callback route, so it loads the **whole SPA** (bundle, router, Pinia,
-`OidcCallback`) just to pass the response URL to the parent window. The
-package ships a tiny dependency-free page that does only that.
+**Why:** the hidden iframe of a silent authorize has to land somewhere on the
+SPA origin. On the normal callback route it would load the **whole SPA**
+(bundle, router, Pinia, `OidcCallback`) just to pass the response URL to the
+parent window. The package ships a tiny dependency-free page that does only
+that, and a Vite plugin that serves it — nothing to copy.
 
-1. Copy `node_modules/@munipuno/hydra-auth-vue/assets/oidc-silent-callback.html`
-   to the SPA's `public/` (it must be served from the SPA origin).
-2. Set the option:
+1. Add the plugin (serves `/oidc-silent-callback.html` in dev, emits it on build):
 
    ```js
-   createHydraAuth({
-     // ...
-     silentRedirectUri: `${window.location.origin}/oidc-silent-callback.html`,
-   })
+   // quasar.config.js
+   build: {
+     vitePlugins: [['@munipuno/hydra-auth-vue/vite', {}]],
+   }
+   // plain Vite
+   import { hydraAuthVite } from '@munipuno/hydra-auth-vue/vite'
+   export default { plugins: [hydraAuthVite()] }
    ```
 
+   Option `path` changes the URL (default `/oidc-silent-callback.html`).
+
+2. Nothing to set: when `resources` are declared, `silentRedirectUri` defaults
+   to `/oidc-silent-callback.html` on the `redirectUri` origin. Without
+   `resources` it stays `redirectUri` (v0.5.0 behavior). An explicit
+   `silentRedirectUri` always wins.
+
 3. Register that exact URI (e.g. `https://app.munipuno.gob.pe/oidc-silent-callback.html`)
-   in the Hydra client's `redirect_uris` — from the core's **Accesos (clients)**
-   tab. Hydra rejects an unregistered redirect URI.
+   in the Hydra client's `redirect_uris` — the core's **Accesos (clients)** tab
+   suggests it when creating a Web / App móvil client. Hydra rejects an
+   unregistered redirect URI.
 
 The page posts `{ source: 'oidc-client', url: location.href, keepOpen: false }`
 to `window.parent` with `targetOrigin = location.origin` (what oidc-client-ts
-expects), does nothing when opened top-level, and renders no UI.
-
-Without `silentRedirectUri` everything keeps working through the normal
-callback route (`redirectUri`).
+expects), does nothing when opened top-level, and renders no UI. Fallback
+without the plugin: copy `assets/oidc-silent-callback.html` to the SPA's
+`public/`.
 
 ### Still to confirm in the browser
 

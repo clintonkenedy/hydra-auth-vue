@@ -52,6 +52,29 @@ describe('silentRedirectUri option (S9)', () => {
     setActivePinia(createPinia())
   })
 
+  // S11: with resources declared the default points at the shipped page.
+  it('derives silentRedirectUri from redirectUri when resources are declared', () => {
+    const auth = createHydraAuth({ ...BASE_OPTIONS, resources: { x: { audience: 'x-aud' } } })
+
+    expect(auth.userManager.settings.silent_redirect_uri).toBe(SILENT_URI)
+  })
+
+  it('keeps silent_redirect_uri = redirectUri without resources', () => {
+    const auth = createHydraAuth({ ...BASE_OPTIONS })
+
+    expect(auth.userManager.settings.silent_redirect_uri).toBe(BASE_OPTIONS.redirectUri)
+  })
+
+  it('lets an explicit silentRedirectUri win over the derived default', () => {
+    const auth = createHydraAuth({
+      ...BASE_OPTIONS,
+      resources: { x: { audience: 'x-aud' } },
+      silentRedirectUri: 'http://localhost/custom.html',
+    })
+
+    expect(auth.userManager.settings.silent_redirect_uri).toBe('http://localhost/custom.html')
+  })
+
   it('passes silentRedirectUri to the primary UserManager as silent_redirect_uri', () => {
     const auth = createHydraAuth({ ...BASE_OPTIONS, silentRedirectUri: SILENT_URI })
 

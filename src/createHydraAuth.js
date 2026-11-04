@@ -32,9 +32,10 @@ const DEFAULT_SESSION_TIMEOUTS = {
  * @param {string} options.clientId OIDC client id.
  * @param {string} options.redirectUri Redirect URI (callback route).
  * @param {string} [options.silentRedirectUri] Silent-callback URI used by hidden-iframe
- *   silent authorizes (primary and resource managers). Defaults to `redirectUri`;
- *   point it at the shipped `assets/oidc-silent-callback.html` (served from the SPA
- *   origin and registered in the Hydra client) so the iframe does not load the SPA.
+ *   silent authorizes (primary and resource managers). Default: with `resources`
+ *   declared, `/oidc-silent-callback.html` on the `redirectUri` origin (the page the
+ *   `hydraAuthVite()` plugin serves); without resources, `redirectUri`. Register it in
+ *   the Hydra client either way.
  * @param {string} options.postLogoutRedirectUri Post-logout redirect URI.
  * @param {string} [options.scope] Defaults to `openid profile email offline_access`.
  * @param {string} options.coreApiUrl Base URL used to fetch `/api/user`.
@@ -67,7 +68,7 @@ export function createHydraAuth(options) {
     authority,
     clientId,
     redirectUri,
-    silentRedirectUri = redirectUri,
+    silentRedirectUri,
     postLogoutRedirectUri,
     scope = DEFAULT_SCOPE,
     coreApiUrl,
@@ -103,11 +104,19 @@ export function createHydraAuth(options) {
     ...sessionTimeouts,
   }
 
+  // S11: with resources the silent iframe should land on the shipped page
+  // (served by the Vite plugin) instead of loading the whole SPA.
+  const silentUri =
+    silentRedirectUri ??
+    (Object.keys(resources ?? {}).length > 0
+      ? new URL('/oidc-silent-callback.html', redirectUri).href
+      : redirectUri)
+
   const userManager = new UserManager({
     authority,
     client_id: clientId,
     redirect_uri: redirectUri,
-    silent_redirect_uri: silentRedirectUri,
+    silent_redirect_uri: silentUri,
     post_logout_redirect_uri: postLogoutRedirectUri,
     response_type: 'code',
     scope,
