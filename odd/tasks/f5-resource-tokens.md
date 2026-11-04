@@ -16,6 +16,10 @@ Branch: `feat/f5-resource-tokens`. Test-first, no push. Source: muni-infra `BACK
 
 - S9 (silent callback page) `createHydraAuth({ silentRedirectUri })`, optional; default `redirectUri` (today's behavior, byte-for-byte). When set, every resource `UserManager` uses it as `silent_redirect_uri` (the primary manager too). The package ships `assets/oidc-silent-callback.html`: a dependency-free page that posts `{ source: 'oidc-client', url: location.href, keepOpen: false }` to `window.parent` with `targetOrigin = location.origin` (exactly what oidc-client-ts `IFrameWindow` expects: same origin, `source === 'oidc-client'`, `state` read from `url`), does nothing when it has no parent, and renders no UI. `files` in package.json includes `assets`. README: copy the file to the SPA's `public/`, set `silentRedirectUri: '<origin>/oidc-silent-callback.html'`, and register that URI in the Hydra client's `redirect_uris` (from the core's Accesos tab). With it, the hidden iframe no longer loads the SPA.
 
+- S10 (zero-config page) Owner: "esto no debria agregare en el paquete bro?". The package exports a Vite plugin, `hydraAuthVite()` from `@munipuno/hydra-auth-vue/vite`, that (a) in dev serves `GET /oidc-silent-callback.html` with the shipped page (`Content-Type: text/html`, no cache), and (b) on build emits `oidc-silent-callback.html` at the output root with the same content. Path configurable: `hydraAuthVite({ path: '/oidc-silent-callback.html' })`. One line in `quasar.config.js` (`build.vitePlugins`). The shipped asset stays the single source (the plugin reads it).
+- S11 (derived default) When `resources` is non-empty and `silentRedirectUri` is not given, it defaults to `new URL('/oidc-silent-callback.html', redirectUri).href`; with `resources` empty/absent the default stays `redirectUri` (v0.5.0 behavior). An explicit `silentRedirectUri` always wins.
+- S12 (core suggestion, muni-usuarios) When creating a Web or App móvil client from the Accesos tab, the redirect URIs field is prefilled with two suggestions derived from the sistema `url` when present (`<url>/oidc-callback`, `<url>/oidc-silent-callback.html`), editable; with no `url`, the hint names both paths. Pure helper + vitest.
+
 ## Spike results (parent, local Hydra v2, client_credentials)
 
 - Hydra enforces the per-client `audience` allow-list: requesting an allowed audience yields a token with `aud: ["sistrans-local"]`; a non-allowed one is refused with `invalid_request`; no audience → `aud: []`.
@@ -29,6 +33,9 @@ Branch: `feat/f5-resource-tokens`. Test-first, no push. Source: muni-infra `BACK
 
 - [x] T4 S9 — `silentRedirectUri` option (default `redirectUri`), primary + resource managers carry `silent_redirect_uri`, shipped `assets/oidc-silent-callback.html` (dependency-free postMessage), `files` includes assets, README subsection. Route: worker, test-first. Commit: `a92eb36`. Evidence: RED 6 → GREEN; full suite 90/90. Note: the primary manager now always has `silent_redirect_uri` (previously unset; primary renewals use the refresh token, so no behavior change in practice).
 
+- [ ] T5 S10-S11 — Vite plugin (`src/vite.js`, exported as `./vite`) + derived default. Route: worker, test-first. Commit: pending.
+- [ ] T6 S12 — core: suggested redirect URIs for web/móvil clients (muni-usuarios, `clientTypes.js` + `ClientFormDialog.vue`). Route: worker. Commit: pending.
+
 ## Log
 
 - L1 (owner, verbatim): "si bro mergealo a min y marcalo como gechi y e inicia f5 bro" (after choosing option B: "ok bro ta bien tons vamos con esa").
@@ -40,4 +47,5 @@ Branch: `feat/f5-resource-tokens`. Test-first, no push. Source: muni-infra `BACK
 - L7 (T3 done): token with `aud: [sistrans-local]` obtained silently after IdP T4 (audience grant). Option B confirmed end-to-end on local Hydra v2.
 - L8 (evidence, oidc-client-ts 3.5 `IFrameWindow`): the parent resolves the silent request from a `message` event where `e.origin === window.location.origin` and `e.data.source === 'oidc-client'`, reading `state` from `e.data.url`; `_notifyParent` posts `{source, url, keepOpen}` with `targetOrigin = window.location.origin`. No library is needed inside the iframe page.
 - L9 (owner test, T4): with `silentRedirectUri` + `public/oidc-silent-callback.html` + the URI registered on `usuarios-local`, a fresh resource token takes 587 ms (was several seconds); no `[Quasar] Running SPA` in the iframe anymore; token still carries `aud: [sistrans-local]`. F5 package side complete.
+- L10 (env): package devDependencies include vite 6.4.4 (via vitest); `exports` is `{ '.': './src/index.js' }`; the core's `quasar.config.js` has `build.vitePlugins: [...]`.
 - Engram mirror: no memory tools callable in this session.
