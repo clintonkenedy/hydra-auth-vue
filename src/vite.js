@@ -43,3 +43,5 @@ export function hydraAuthVite(options = {}) {
     },
   }
 }
+
+export default hydraAuthVite

@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it, vi } from 'vitest'
-import { hydraAuthVite } from '../src/vite.js'
+import hydraAuthViteDefault, { hydraAuthVite } from '../src/vite.js'
 
 const PAGE = readFileSync(
   resolve(dirname(fileURLToPath(import.meta.url)), '../assets/oidc-silent-callback.html'),
@@ -21,6 +21,11 @@ function fakeRes() {
 }
 
 describe('hydraAuthVite (S10)', () => {
+  // Quasar's `vitePlugins: [['pkg', opts]]` tuple calls the default export.
+  it('is also the default export', () => {
+    expect(hydraAuthViteDefault).toBe(hydraAuthVite)
+  })
+
   it('is a named Vite plugin', () => {
     expect(hydraAuthVite().name).toBe('hydra-auth-vue:silent-callback')
   })
