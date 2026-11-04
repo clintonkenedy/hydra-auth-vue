@@ -33,7 +33,7 @@ Branch: `feat/f5-resource-tokens`. Test-first, no push. Source: muni-infra `BACK
 
 - [x] T4 S9 — `silentRedirectUri` option (default `redirectUri`), primary + resource managers carry `silent_redirect_uri`, shipped `assets/oidc-silent-callback.html` (dependency-free postMessage), `files` includes assets, README subsection. Route: worker, test-first. Commit: `a92eb36`. Evidence: RED 6 → GREEN; full suite 90/90. Note: the primary manager now always has `silent_redirect_uri` (previously unset; primary renewals use the refresh token, so no behavior change in practice).
 
-- [x] T5 S10-S11 — `src/vite.js` `hydraAuthVite({ path })` (dev middleware + `emitFile`), `exports['./vite']`, derived `silentRedirectUri` with resources, README rewritten (plugin first, copy as fallback). Route: inline (worker timed out with no changes), test-first. Commit: T5 commit (see git log). Evidence: RED 6 (plugin missing, derived default) → GREEN; one F5 pin updated to the new S11 default; full suite 98/98.
+- [x] T5 S10-S11 — `src/vite.js` `hydraAuthVite({ path })` (dev middleware + `emitFile`), `exports['./vite']`, derived `silentRedirectUri` with resources, README rewritten (plugin first, copy as fallback). Route: inline (worker timed out with no changes), test-first. Commit: `8d2b864`. Evidence: RED 6 (plugin missing, derived default) → GREEN; one F5 pin updated to the new S11 default; full suite 98/98.
 - [ ] T6 S12 — core: suggested redirect URIs for web/móvil clients (muni-usuarios, `clientTypes.js` + `ClientFormDialog.vue`). Route: worker. Commit: pending.
 
 ## Log
