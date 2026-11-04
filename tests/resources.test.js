@@ -244,7 +244,8 @@ describe('resource tokens (F5)', () => {
       expect(settings.authority).toBe(BASE_OPTIONS.authority)
       expect(settings.client_id).toBe(BASE_OPTIONS.clientId)
       expect(settings.redirect_uri).toBe(BASE_OPTIONS.redirectUri)
-      expect(settings.silent_redirect_uri).toBe(BASE_OPTIONS.redirectUri)
+      // S11: with resources declared the silent iframe lands on the shipped page.
+      expect(settings.silent_redirect_uri).toBe('http://localhost/oidc-silent-callback.html')
       expect(settings.response_type).toBe('code')
       expect(settings.automaticSilentRenew).toBe(false)
       expect(settings.userStore.store).not.toBe(sessionStorage)
