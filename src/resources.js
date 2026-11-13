@@ -70,6 +70,8 @@ export function createResourceTokens(context, resourcesOption = {}) {
         name,
         new UserManager({
           authority: primary.authority,
+          // F9: reuse the primary static metadata (`discovery: false`).
+          ...(primary.metadata ? { metadata: primary.metadata } : {}),
           client_id: primary.client_id,
           redirect_uri: primary.redirect_uri,
           post_logout_redirect_uri: primary.post_logout_redirect_uri,

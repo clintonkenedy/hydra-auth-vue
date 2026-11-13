@@ -4,6 +4,7 @@ import { createAttach } from './axios.js'
 import { createResourceTokens } from './resources.js'
 import { createGuard } from './guard.js'
 import { DEFAULT_BRANDING } from './branding.js'
+import { hydraMetadata } from './metadata.js'
 
 /**
  * Injection key under which the auth context is provided by `install(app)`.
@@ -29,6 +30,12 @@ const DEFAULT_SESSION_TIMEOUTS = {
  *
  * @param {object} options
  * @param {string} options.authority OIDC authority (Hydra public URL).
+ * @param {boolean} [options.discovery] Fetch Hydra's discovery document (default `true`).
+ *   With `false` the OIDC metadata is built from `authority` with Hydra's fixed paths
+ *   (`hydraMetadata(authority)`, also passed to the resource managers) and userinfo is
+ *   not loaded (`loadUserInfo: false`; the profile comes from the id_token). Use it when
+ *   the SPA origin is only in the Hydra client's allowed CORS origins: such an origin
+ *   cannot read the discovery document nor pass the userinfo CORS preflight.
  * @param {string} options.clientId OIDC client id.
  * @param {string} options.redirectUri Redirect URI (callback route).
  * @param {string} [options.silentRedirectUri] Silent-callback URI used by hidden-iframe
@@ -67,6 +74,7 @@ export function createHydraAuth(options) {
   const {
     authority,
     clientId,
+    discovery = true,
     redirectUri,
     silentRedirectUri,
     postLogoutRedirectUri,
@@ -112,8 +120,12 @@ export function createHydraAuth(options) {
       ? new URL('/oidc-silent-callback.html', redirectUri).href
       : redirectUri)
 
+  // F9: without discovery, static Hydra metadata and no userinfo call
+  // (both requests only pass Hydra's global CORS list).
+  const staticMetadata = discovery === false
   const userManager = new UserManager({
     authority,
+    ...(staticMetadata ? { metadata: hydraMetadata(authority) } : {}),
     client_id: clientId,
     redirect_uri: redirectUri,
     silent_redirect_uri: silentUri,
@@ -121,7 +133,7 @@ export function createHydraAuth(options) {
     response_type: 'code',
     scope,
     automaticSilentRenew: true,
-    loadUserInfo: true,
+    loadUserInfo: !staticMetadata,
     userStore: new WebStorageStateStore({ store: storage }),
   })
 

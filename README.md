@@ -12,7 +12,7 @@ Git-installable (tagged release):
 ```json
 {
   "dependencies": {
-    "@munipuno/hydra-auth-vue": "github:clintonkenedy/hydra-auth-vue#v0.6.0"
+    "@munipuno/hydra-auth-vue": "github:clintonkenedy/hydra-auth-vue#v0.7.0"
   }
 }
 ```
@@ -38,6 +38,7 @@ Peer dependencies (installed by the consumer): `vue ^3.4`, `pinia ^2 || ^3`,
 | --- | --- | --- | --- |
 | `authority` | yes | — | OIDC authority (Hydra public URL). |
 | `clientId` | yes | — | OIDC client id. |
+| `discovery` | no | `true` | `false` skips Hydra's discovery document and userinfo (static metadata from `authority`). See [Sin discovery (`discovery: false`)](#sin-discovery-discovery-false). |
 | `redirectUri` | yes | — | Redirect URI pointing at the callback route. |
 | `silentRedirectUri` | no | derived (see below) | Target of hidden-iframe silent authorizes (primary and resources). See [Página de silent callback](#página-de-silent-callback-silentredirecturi). |
 | `postLogoutRedirectUri` | yes | — | Where Hydra sends the browser after logout. |
@@ -288,6 +289,41 @@ yields `aud: ["sistrans-local"]`, a non-allowed one fails with
   restrictions apply when Hydra is on another site),
 - consent for the audience is remembered,
 - a refreshed resource token keeps its `aud`.
+
+## Sin discovery (`discovery: false`)
+
+**When to use it:** the SPA origin is in the Hydra client's allowed CORS
+origins (core UI, **"Orígenes permitidos (CORS)"**) but not in Hydra's global
+CORS list (`HYDRA_CORS_ORIGINS`). Hydra only answers such an origin when the
+request names the client (token, refresh and revoke requests do), so the
+discovery document (`/.well-known/openid-configuration`) and the `/userinfo`
+CORS preflight are blocked by the browser.
+
+```js
+export const hydraAuth = createHydraAuth({
+  // ...required options...
+  authority: 'https://idp.munipuno.gob.pe', // Hydra's public URL
+  discovery: false,
+})
+```
+
+**What it changes:**
+
+- **No discovery request** — the OIDC metadata is built from `authority` with
+  Hydra's fixed paths (`/oauth2/auth`, `/oauth2/token`, `/userinfo`,
+  `/oauth2/sessions/logout`, `/oauth2/revoke`, `/.well-known/jwks.json`;
+  `issuer` = `authority`). The same metadata is passed to the
+  [resource](#varios-tokens-por-api-resources) managers. It is exported as
+  `hydraMetadata(authority)`.
+- **No userinfo** — `loadUserInfo` is `false`; the OIDC profile comes from the
+  id_token (`sub`, `auth_time`, `iat` — all the package reads). The app
+  profile still comes from `${coreApiUrl}/api/user`.
+
+**Requirements:** `authority` must be Hydra's **public URL** (the issuer, as
+Hydra advertises it — the endpoints are derived from it), and the client's
+allowed CORS origins must include the SPA origin. Without `discovery: false`
+(the default) the behavior is unchanged and the SPA origin still needs to be in
+Hydra's global CORS list.
 
 ## Session timeouts
 
