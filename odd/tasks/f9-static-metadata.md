@@ -36,9 +36,11 @@ global `HYDRA_CORS_ORIGINS` plus an IdP restart. Release v0.7.0; SGP and portal 
 
 - [x] T1 — S1-S5 (library, tests, README, version) — worker — commit: the `feat:` commit tagged `v0.7.0`
   (Risk item 2, see L5)
-- [ ] T2 — S6 (SGP + portal) — inline — commit: _pending_
-- [ ] T3 — S7 (guide) — inline — commit: _pending_
-- [ ] T4 — pushes (library tag, SGP main, muni-usuarios) — owner decision — _pending_
+- [x] T2 — S6 (SGP + portal) — inline — commits: SGP `c7055a7` (pushed), muni-portal `007d898` (local, no
+  remote) (L6)
+- [x] T3 — S7 (guide) — inline — commit: muni-usuarios `fed1d29` (pushed)
+- [x] T4 — pushes — owner: "Sí, pusheá todo cuando esté verificado" — library `main` + tag `v0.7.0`,
+  muni-usuarios `main`, SGP `main` (L6)
 
 ## Log
 
@@ -68,3 +70,12 @@ global `HYDRA_CORS_ORIGINS` plus an IdP restart. Release v0.7.0; SGP and portal 
   removed. Its suggested pinning test (no `monitorSession`, no `revokeTokensOnSignout`, no
   `check_session_iframe`) was added: suite 109. Advisories kept as documentation: pass a real boolean
   `false`; `authority` must be Hydra's public URL that is also its issuer.
+- L6 (evidence, T2-T4): the library's `origin` remote is HTTPS without credentials, so `main` and the
+  tag were pushed over SSH to the same repository (`7359b94..079bf50`, tag `v0.7.0` → `079bf50`);
+  codeload answered 404 for `refs/tags/v0.7.0` for a few minutes (a request made before the push was
+  cached) while the other archive URLs answered 200, then 200. SGP: 0.7.0 installed (`hydraMetadata`
+  exported), vitest 17 OK, vite build OK, and the bundle contains the static Hydra paths and
+  `discovery:false`; pushed `37c52e8..c7055a7`. Portal: 0.7.0 installed, vitest 17 OK, eslint and
+  prettier clean, `quasar build` OK; committed locally `007d898` (no remote). Guide: muni-usuarios
+  `fed1d29` pushed. Not verified: a full browser login from an origin that is only in the client's
+  list (the CORS part was proven with curl against local Hydra in L3; the library part by unit tests).
