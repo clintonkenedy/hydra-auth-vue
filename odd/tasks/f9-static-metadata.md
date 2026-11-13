@@ -79,3 +79,6 @@ global `HYDRA_CORS_ORIGINS` plus an IdP restart. Release v0.7.0; SGP and portal 
   prettier clean, `quasar build` OK; committed locally `007d898` (no remote). Guide: muni-usuarios
   `fed1d29` pushed. Not verified: a full browser login from an origin that is only in the client's
   list (the CORS part was proven with curl against local Hydra in L3; the library part by unit tests).
+- L7 (user, verbatim, production): "todo bien bro" — after deploying the SGP front `c7055a7` and
+  removing `https://sgp.dev.munipuno.gob.pe` from Hydra's global `HYDRA_CORS_ORIGINS` (steps given
+  in chat), the owner reports the SGP login works. Reported by the owner, not observed by the agent.
